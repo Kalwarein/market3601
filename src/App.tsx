@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
 import Home from "./pages/Home";
 import ProductDetail from "./pages/ProductDetail";
 import CategoryListing from "./pages/CategoryListing";
@@ -33,6 +34,8 @@ import Ranking from "./pages/Ranking";
 import SellerDashboard from "./pages/seller/Dashboard";
 import SellerProducts from "./pages/seller/Products";
 import SellerEarnings from "./pages/seller/Earnings";
+import Auth from "./pages/Auth";
+import AdminDashboard from "./pages/admin/Dashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,8 +46,10 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
+        <AuthProvider>
+          <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/auth" element={<Auth />} />
           <Route path="/categories" element={<CategoryListing />} />
           <Route path="/listings/:category" element={<CategoryListing />} />
           <Route path="/messenger" element={<Messenger />} />
@@ -76,6 +81,9 @@ const App = () => (
           <Route path="/help/:topic" element={<HelpTopic />} />
           <Route path="/support/chat" element={<SupportChat />} />
           
+          {/* Admin Routes */}
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          
           {/* Business Features */}
           <Route path="/quotation" element={<Quotation />} />
           <Route path="/customization" element={<Customization />} />
@@ -96,7 +104,8 @@ const App = () => (
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
-        </Routes>
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
