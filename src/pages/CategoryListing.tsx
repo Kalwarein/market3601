@@ -1,20 +1,56 @@
-import { useState } from "react";
-import { Grid3x3, List } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Grid3x3, List, Loader2 } from "lucide-react";
 import { Header } from "@/components/market360/Header";
 import { BottomNav } from "@/components/market360/BottomNav";
 import { CategoryChips } from "@/components/market360/CategoryChips";
 import { ProductCard } from "@/components/market360/ProductCard";
 import { Button } from "@/components/ui/button";
-import { categories, products } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function CategoryListing() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredProducts =
-    activeCategory === "all"
-      ? products
-      : products.filter((p) => p.tags.includes(activeCategory));
+  useEffect(() => {
+    fetchCategoriesAndProducts();
+  }, []);
+
+  const fetchCategoriesAndProducts = async () => {
+    try {
+      const { data: categoriesData } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('published', true)
+        .order('display_order');
+
+      const { data: productsData } = await supabase
+        .from('products')
+        .select('*, store:stores(*), images:product_images(*)')
+        .eq('published', true);
+
+      setCategories([{ id: 'all', name: 'All', icon: 'grid', slug: 'all' }, ...(categoriesData || [])]);
+      setProducts(productsData || []);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProducts = activeCategory === "all"
+    ? products
+    : products.filter((p) => p.category_id === activeCategory);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24">
@@ -57,16 +93,44 @@ export default function CategoryListing() {
 
       {/* Product Grid/List */}
       <div className="p-4">
-        {layout === "grid" ? (
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">No products found in this category</p>
+          </div>
+        ) : layout === "grid" ? (
           <div className="grid grid-cols-2 gap-3">
             {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} layout="grid" />
+              <ProductCard 
+                key={product.id} 
+                product={{
+                  ...product,
+                  image: product.images?.[0]?.url || '/placeholder.svg',
+                  seller: { 
+                    name: product.store?.name || 'Unknown',
+                    verified: product.store?.verified || false 
+                  },
+                  location: product.store?.location?.city || 'Unknown'
+                }} 
+                layout="grid" 
+              />
             ))}
           </div>
         ) : (
           <div className="space-y-3">
             {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} layout="list" />
+              <ProductCard 
+                key={product.id} 
+                product={{
+                  ...product,
+                  image: product.images?.[0]?.url || '/placeholder.svg',
+                  seller: { 
+                    name: product.store?.name || 'Unknown',
+                    verified: product.store?.verified || false 
+                  },
+                  location: product.store?.location?.city || 'Unknown'
+                }} 
+                layout="list" 
+              />
             ))}
           </div>
         )}

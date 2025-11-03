@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BottomNav } from "@/components/market360/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,58 +11,72 @@ import {
   MoreHorizontal, 
   ShoppingCart,
   Package,
-  MoreVertical
+  MoreVertical,
+  Loader2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { products } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface Conversation {
-  id: string;
-  sellerId: string;
-  sellerName: string;
-  sellerCompany: string;
-  lastMessage: string;
-  timestamp: string;
-  unread: boolean;
-  productImage?: string;
-}
-
-const mockConversations: Conversation[] = [
-  {
-    id: "conv_1",
-    sellerId: "s_01",
-    sellerName: "Jessia TU",
-    sellerCompany: "Zhanjiang Weitu Electronic Commerce Co., Ltd.",
-    lastMessage: "ok",
-    timestamp: "Friday",
-    unread: true,
-    productImage: "https://images.unsplash.com/photo-1592286927505-c80d0affd5c8?w=100",
-  },
-  {
-    id: "conv_2",
-    sellerId: "s_02",
-    sellerName: "J CHOI",
-    sellerCompany: "Xixun Trading (guangzhou) Ltd.",
-    lastMessage: "hi",
-    timestamp: "Friday",
-    unread: true,
-  },
-];
 
 export default function Messenger() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"orders" | "notifications" | "others">("orders");
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const filteredConversations = mockConversations.filter(conv => 
-    (filter === "all" || conv.unread) &&
+  useEffect(() => {
+    if (user) {
+      fetchConversations();
+      fetchProducts();
+    }
+  }, [user]);
+
+  const fetchConversations = async () => {
+    try {
+      const { data } = await supabase
+        .from('conversation_members')
+        .select('*')
+        .eq('user_id', user?.id);
+
+      setConversations(data || []);
+      const unread = data?.reduce((sum: number, conv: any) => sum + (conv.unread_count || 0), 0) || 0;
+      setUnreadCount(unread);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProducts = async () => {
+    const { data } = await supabase
+      .from('products')
+      .select('*, images:product_images(url)')
+      .eq('published', true)
+      .limit(2);
+    
+    setProducts(data || []);
+  };
+
+  const filteredConversations = conversations.filter(conv => 
+    (filter === "all" || conv.unread_count > 0) &&
     (searchQuery === "" || 
-     conv.sellerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     conv.sellerCompany.toLowerCase().includes(searchQuery.toLowerCase()))
+     conv.conversation?.title?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const recommendedProducts = products.slice(5, 7);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface-1 pb-24">
@@ -96,9 +110,11 @@ export default function Messenger() {
           >
             <div className="relative">
               <Bell className="w-5 h-5" />
-              <Badge className="absolute -top-2 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
-                9
-              </Badge>
+              {unreadCount > 0 && (
+                <Badge className="absolute -top-2 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
+                  {unreadCount}
+                </Badge>
+              )}
             </div>
             <span className={`text-xs ${activeTab === "notifications" ? "font-bold" : ""}`}>
               Notifications
@@ -141,8 +157,10 @@ export default function Messenger() {
           onClick={() => setFilter(filter === "unread" ? "all" : "unread")}
         >
           Unread
-          {filteredConversations.filter(c => c.unread).length > 0 && (
-            <Badge className="ml-2 h-5 w-5 p-0 rounded-full">{filteredConversations.filter(c => c.unread).length}</Badge>
+          {filteredConversations.filter(c => c.unread_count > 0).length > 0 && (
+            <Badge className="ml-2 h-5 w-5 p-0 rounded-full">
+              {filteredConversations.filter(c => c.unread_count > 0).length}
+            </Badge>
           )}
         </Button>
         <Button variant="outline" size="sm" className="rounded-full">
@@ -152,45 +170,46 @@ export default function Messenger() {
 
       {/* Conversations List */}
       <ScrollArea className="flex-1">
-        <div className="divide-y">
-          {filteredConversations.map((conv) => (
-            <button
-              key={conv.id}
-              onClick={() => navigate(`/conversation/${conv.id}`)}
-              className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors text-left"
-            >
-              <div className="relative">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-primary text-primary-foreground font-bold">
-                    {conv.sellerName.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                {conv.unread && (
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px] rounded-full">
-                    1
-                  </Badge>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-bold text-sm">{conv.sellerName}</h3>
-                  <span className="text-xs text-muted-foreground">{conv.timestamp}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-1 truncate">
-                  {conv.sellerCompany}
-                </p>
-                <p className="text-sm truncate">{conv.lastMessage}</p>
-              </div>
-              {conv.productImage && (
-                <img
-                  src={conv.productImage}
-                  alt="Product"
-                  className="w-12 h-12 rounded object-cover"
-                />
-              )}
-            </button>
-          ))}
-        </div>
+        {filteredConversations.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            No conversations yet
+          </div>
+        ) : (
+          <div className="divide-y">
+            {filteredConversations.map((conv) => {
+              const lastMessage = conv.conversation?.messages?.[0];
+              return (
+                <button
+                  key={conv.id}
+                  onClick={() => navigate(`/conversation/${conv.conversation_id}`)}
+                  className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors text-left"
+                >
+                  <div className="relative">
+                    <Avatar className="w-12 h-12">
+                      <AvatarFallback className="bg-primary text-primary-foreground font-bold">
+                        C
+                      </AvatarFallback>
+                    </Avatar>
+                    {conv.unread_count > 0 && (
+                      <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px] rounded-full">
+                        {conv.unread_count}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-bold text-sm">{conv.conversation?.title || 'Conversation'}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        {lastMessage?.created_at ? new Date(lastMessage.created_at).toLocaleDateString() : ''}
+                      </span>
+                    </div>
+                    <p className="text-sm truncate">{lastMessage?.body || 'No messages yet'}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Info Message */}
         <div className="px-4 py-6 text-center">
@@ -212,7 +231,7 @@ export default function Messenger() {
             </div>
           </ScrollArea>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            {recommendedProducts.map((product) => (
+            {products.map((product) => (
               <button
                 key={product.id}
                 onClick={() => navigate(`/product/${product.id}`)}
@@ -220,7 +239,7 @@ export default function Messenger() {
               >
                 <div className="relative aspect-square rounded-lg overflow-hidden mb-2 bg-muted">
                   <img 
-                    src={product.image} 
+                    src={product.images?.[0]?.url || '/placeholder.svg'} 
                     alt={product.title}
                     className="w-full h-full object-cover"
                   />

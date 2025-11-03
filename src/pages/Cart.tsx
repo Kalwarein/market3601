@@ -1,53 +1,114 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/market360/Header";
 import { BottomNav } from "@/components/market360/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Trash2, Plus, Minus, ShoppingBag, ShieldCheck, Package, RefreshCcw, MapPin } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, ShieldCheck, Package, RefreshCcw, MapPin, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { products } from "@/data/mockData";
-
-// Mock cart data - TODO: Replace with database
-const initialCartItems = [
-  {
-    id: "p_001",
-    title: "Mobile App Development Services - Basic Package",
-    price: 2000,
-    image: "https://images.unsplash.com/photo-1551650975-87deedd944c3?w=400",
-    quantity: 1,
-  },
-  {
-    id: "p_006",
-    title: "Professional Laptop - Business Edition",
-    price: 950,
-    image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400",
-    quantity: 5,
-  },
-];
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function Cart() {
   const navigate = useNavigate();
-  const [cartItems, setCartItems] = useState(initialCartItems);
+  const { user } = useAuth();
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<any[]>([]);
 
-  const updateQuantity = (id: string, delta: number) => {
-    setCartItems((items) =>
-      items.map((item) =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-          : item
-      )
-    );
+  useEffect(() => {
+    if (user) {
+      fetchCart();
+      fetchRecommendedProducts();
+    }
+  }, [user]);
+
+  const fetchCart = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cart_items')
+        .select(`
+          *,
+          product:products(
+            id, title, price, currency,
+            images:product_images(url)
+          )
+        `)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+      setCartItems(data || []);
+    } catch (error: any) {
+      console.error('Error fetching cart:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const removeItem = (id: string) => {
-    setCartItems((items) => items.filter((item) => item.id !== id));
+  const fetchRecommendedProducts = async () => {
+    const { data } = await supabase
+      .from('products')
+      .select('*, images:product_images(url)')
+      .eq('published', true)
+      .limit(4);
+    
+    setProducts(data || []);
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = 50; // Mock shipping cost
+  const updateQuantity = async (id: string, delta: number) => {
+    const item = cartItems.find(i => i.id === id);
+    if (!item) return;
+
+    const newQuantity = Math.max(1, item.quantity + delta);
+    
+    try {
+      const { error } = await supabase
+        .from('cart_items')
+        .update({ quantity: newQuantity })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setCartItems((items) =>
+        items.map((item) =>
+          item.id === id ? { ...item, quantity: newQuantity } : item
+        )
+      );
+    } catch (error: any) {
+      toast.error('Failed to update quantity');
+    }
+  };
+
+  const removeItem = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setCartItems((items) => items.filter((item) => item.id !== id));
+      toast.success('Item removed from cart');
+    } catch (error: any) {
+      toast.error('Failed to remove item');
+    }
+  };
+
+  const subtotal = cartItems.reduce((sum, item) => {
+    const price = item.product?.price || 0;
+    return sum + price * item.quantity;
+  }, 0);
+  const shipping = 50;
   const total = subtotal + shipping;
 
-  const recommendedProducts = products.slice(0, 4);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -132,7 +193,7 @@ export default function Cart() {
           <div className="w-full">
             <h3 className="text-lg font-bold mb-4 text-left">Recommended for you</h3>
             <div className="grid grid-cols-2 gap-3">
-              {recommendedProducts.map((product) => (
+              {products.map((product) => (
                 <button
                   key={product.id}
                   onClick={() => navigate(`/product/${product.id}`)}
@@ -140,7 +201,7 @@ export default function Cart() {
                 >
                   <div className="relative aspect-square bg-muted">
                     <img 
-                      src={product.image} 
+                      src={product.images?.[0]?.url || '/placeholder.svg'} 
                       alt={product.title}
                       className="w-full h-full object-cover"
                     />
@@ -148,10 +209,10 @@ export default function Cart() {
                   <div className="p-2">
                     <p className="text-sm font-medium line-clamp-2 mb-1">{product.title}</p>
                     <p className="text-sm font-bold text-primary">
-                      US${product.price.amount.toLocaleString()}
+                      {product.currency} ${product.price?.toLocaleString()}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      MOQ: {product.moq || 1}  •  {Math.floor(Math.random() * 1000)} sold
+                      MOQ: {product.moq || 1}
                     </p>
                   </div>
                 </button>
@@ -173,50 +234,57 @@ export default function Cart() {
         <h1 className="text-2xl font-bold mb-4">Shopping Cart ({cartItems.length})</h1>
 
         <div className="space-y-4 mb-4">
-          {cartItems.map((item) => (
-            <div key={item.id} className="bg-card rounded-xl p-4 shadow-sm">
-              <div className="flex gap-4">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="w-20 h-20 rounded-lg object-cover"
-                />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm mb-2 line-clamp-2">{item.title}</h3>
-                  <p className="text-primary font-bold mb-2">${item.price.toLocaleString()}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 bg-muted rounded-lg">
+          {cartItems.map((item) => {
+            const product = item.product;
+            if (!product) return null;
+            
+            return (
+              <div key={item.id} className="bg-card rounded-xl p-4 shadow-sm">
+                <div className="flex gap-4">
+                  <img
+                    src={product.images?.[0]?.url || '/placeholder.svg'}
+                    alt={product.title}
+                    className="w-20 h-20 rounded-lg object-cover"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-sm mb-2 line-clamp-2">{product.title}</h3>
+                    <p className="text-primary font-bold mb-2">
+                      {product.currency} ${product.price?.toLocaleString()}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 bg-muted rounded-lg">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => updateQuantity(item.id, -1)}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => updateQuantity(item.id, 1)}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => updateQuantity(item.id, -1)}
+                        className="text-destructive"
+                        onClick={() => removeItem(item.id)}
                       >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <span className="w-8 text-center font-medium">{item.quantity}</span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => updateQuantity(item.id, 1)}
-                      >
-                        <Plus className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive"
-                      onClick={() => removeItem(item.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
