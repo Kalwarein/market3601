@@ -21,7 +21,7 @@ export default function CategoryListing() {
   const fetchCategoriesAndProducts = async () => {
     try {
       const { data: categoriesData } = await supabase
-        .from('categories')
+        .from('categories' as any)
         .select('*')
         .eq('published', true)
         .order('display_order');

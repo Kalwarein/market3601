@@ -40,7 +40,7 @@ export default function Messenger() {
   const fetchConversations = async () => {
     try {
       const { data } = await supabase
-        .from('conversation_members')
+        .from('conversation_members' as any)
         .select('*')
         .eq('user_id', user?.id);
 
