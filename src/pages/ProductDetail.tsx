@@ -1,30 +1,73 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, Heart, Share2, Shield, Star, MapPin, MessageCircle, ShoppingCart } from "lucide-react";
+import { ChevronLeft, Heart, Share2, Shield, Star, MapPin, MessageCircle, ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { products } from "@/data/mockData";
 import { ProductCarousel } from "@/components/market360/ProductCarousel";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
+  const [product, setProduct] = useState<any>(null);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (id) {
+      fetchProduct();
+    }
+  }, [id]);
+
+  const fetchProduct = async () => {
+    try {
+      const { data: productData } = await supabase
+        .from('products')
+        .select('*, store:stores(*), images:product_images(*), variants:product_variants(*)')
+        .eq('id', id)
+        .single();
+
+      if (productData) {
+        setProduct(productData);
+
+        // Fetch related products
+        const { data: related } = await supabase
+          .from('products')
+          .select('*, images:product_images(url)')
+          .eq('category_id', productData.category_id)
+          .neq('id', id)
+          .eq('published', true)
+          .limit(6);
+
+        setRelatedProducts(related || []);
+      }
+    } catch (error) {
+      console.error('Error fetching product:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   
-  const product = products.find((p) => p.id === id);
-  
-  if (!product) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p>Product not found</p>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  const relatedProducts = products.filter((p) => 
-    p.id !== product.id && p.tags.some(tag => product.tags.includes(tag))
-  ).slice(0, 6);
+  if (!product) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg font-medium mb-2">Product not found</p>
+          <Button onClick={() => navigate(-1)}>Go Back</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface-1 pb-20">
@@ -53,15 +96,10 @@ export default function ProductDetail() {
       {/* Image Gallery */}
       <div className="relative bg-card">
         <img
-          src={product.image}
+          src={product.images?.[0]?.url || '/placeholder.svg'}
           alt={product.title}
           className="w-full aspect-square object-cover"
         />
-        {product.promotion && (
-          <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground">
-            {product.promotion.label}
-          </Badge>
-        )}
       </div>
 
       {/* Product Info */}
@@ -78,9 +116,9 @@ export default function ProductDetail() {
 
         <div className="flex items-baseline gap-2 mb-4">
           <span className="text-3xl font-bold text-primary">
-            ${product.price.amount.toLocaleString()}
+            ${product.price?.toLocaleString() || '0'}
           </span>
-          <span className="text-sm text-muted-foreground">{product.price.currency}</span>
+          <span className="text-sm text-muted-foreground">{product.currency || 'USD'}</span>
         </div>
 
         {product.moq && (
@@ -108,20 +146,22 @@ export default function ProductDetail() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <span className="font-bold text-lg">{product.seller.name.charAt(0)}</span>
+              {product.store?.logo_url ? (
+                <img src={product.store.logo_url} alt={product.store.name} className="w-full h-full object-cover rounded-full" />
+              ) : (
+                <span className="font-bold text-lg">{product.store?.name?.charAt(0) || 'S'}</span>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-medium">{product.seller.name}</span>
-                {product.seller.verified && <Shield className="w-4 h-4 text-primary" />}
-              </div>
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                <span>{product.seller.rating}</span>
+                <span className="font-medium">{product.store?.name || 'Store'}</span>
+                {product.store?.verified && <Shield className="w-4 h-4 text-primary" />}
               </div>
             </div>
           </div>
-          <Button variant="outline" size="sm">Visit Store</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/store/${product.store_id}`)}>
+            Visit Store
+          </Button>
         </div>
         
         <div className="grid grid-cols-2 gap-2">
@@ -144,17 +184,17 @@ export default function ProductDetail() {
       )}
 
       {/* Specifications */}
-      {product.specifications && (
+      {product.metadata && Object.keys(product.metadata).length > 0 && (
         <div className="bg-card mb-2">
           <Accordion type="single" collapsible>
             <AccordionItem value="specs">
               <AccordionTrigger className="px-4">Specifications</AccordionTrigger>
               <AccordionContent className="px-4">
                 <div className="space-y-2">
-                  {Object.entries(product.specifications).map(([key, value]) => (
+                  {Object.entries(product.metadata).map(([key, value]) => (
                     <div key={key} className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{key}</span>
-                      <span className="font-medium">{value}</span>
+                      <span className="font-medium">{String(value)}</span>
                     </div>
                   ))}
                 </div>
