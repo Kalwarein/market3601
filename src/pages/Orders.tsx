@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/market360/HeaderBar";
 import { PageContainer } from "@/components/market360/PageContainer";
@@ -6,53 +6,64 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Package } from "lucide-react";
-
-const orders = [
-  {
-    id: "ORD-001",
-    date: "Nov 1, 2025",
-    status: "delivered",
-    total: 950,
-    items: [
-      {
-        title: "Professional Laptop - Business Edition",
-        image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400",
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "ORD-002",
-    date: "Oct 28, 2025",
-    status: "shipped",
-    total: 850,
-    items: [
-      {
-        title: "Security Camera System",
-        image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=400",
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "ORD-003",
-    date: "Oct 25, 2025",
-    status: "pending",
-    total: 2000,
-    items: [
-      {
-        title: "Mobile App Development Services",
-        image: "https://images.unsplash.com/photo-1551650975-87deedd944c3?w=400",
-        quantity: 1,
-      },
-    ],
-  },
-];
+import { Package, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Orders() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("all");
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchOrders();
+    }
+  }, [user]);
+
+  const fetchOrders = async () => {
+    try {
+      const { data: ordersData, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            product:products (
+              images:product_images (url)
+            )
+          )
+        `)
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const transformedOrders = ordersData?.map(order => ({
+        id: order.id,
+        date: new Date(order.created_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        }),
+        status: order.status,
+        total: order.total_amount,
+        items: order.order_items?.map((item: any) => ({
+          title: item.title,
+          image: item.product?.images?.[0]?.url || '/placeholder.svg',
+          quantity: item.quantity,
+        })) || []
+      })) || [];
+
+      setOrders(transformedOrders);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -70,6 +81,17 @@ export default function Orders() {
   const filteredOrders = activeTab === "all" 
     ? orders 
     : orders.filter(order => order.status === activeTab);
+
+  if (loading) {
+    return (
+      <PageContainer>
+        <HeaderBar title="My Orders" />
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
