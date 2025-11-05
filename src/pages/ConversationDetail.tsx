@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,19 @@ import {
   Plus, 
   Smile,
   Image as ImageIcon,
-  X
+  X,
+  CheckCircle,
+  AlertTriangle,
+  Truck,
+  RefreshCw
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
-  sender: "buyer" | "seller";
+  sender: string;
   text: string;
   timestamp: string;
   date?: string;
@@ -63,23 +70,42 @@ const mockMessages: Message[] = [
 
 export default function ConversationDetail() {
   const navigate = useNavigate();
-  const { conversationId } = useParams();
-  const [messages, setMessages] = useState(mockMessages);
+  const { id: conversationId } = useParams();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [showProductCard, setShowProductCard] = useState(true);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const newMsg: Message = {
-        id: Date.now().toString(),
-        sender: "buyer",
-        text: newMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: "sent"
-      };
-      setMessages([...messages, newMsg]);
-      setNewMessage("");
+  useEffect(() => {
+    if (conversationId && user) {
+      fetchMessages();
+      subscribeToMessages();
     }
+  }, [conversationId, user]);
+
+  const fetchMessages = async () => {
+    const { data } = await (supabase as any).from('messages').select('*').eq('conversation_id', conversationId).order('created_at');
+    if (data) setMessages(data.map((m: any) => ({ id: m.id, sender: m.sender_id === user?.id ? 'You' : 'Supplier', text: m.body, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })));
+  };
+
+  const subscribeToMessages = () => {
+    const channel = supabase.channel(`conv-${conversationId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      const m = payload.new as any;
+      setMessages(prev => [...prev, { id: m.id, sender: m.sender_id === user?.id ? 'You' : 'Supplier', text: m.body, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !user) return;
+    await (supabase as any).from('messages').insert({ conversation_id: conversationId, sender_id: user.id, body: newMessage });
+    setNewMessage("");
+  };
+
+  const handleQuickAction = async (action: string) => {
+    const actions: any = { confirm: '✅ Confirmed shipment', report: '⚠️ Reported issue', fulfill: '🚚 Order fulfilled', refund: '💰 Refund requested' };
+    await (supabase as any).from('messages').insert({ conversation_id: conversationId, sender_id: user?.id, body: actions[action], message_type: 'action' });
   };
 
   return (

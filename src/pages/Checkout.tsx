@@ -5,20 +5,118 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, CreditCard, Wallet, MapPin } from "lucide-react";
+import { ArrowLeft, CreditCard, Wallet, MapPin, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [deliveryMethod, setDeliveryMethod] = useState("delivery");
+  const [loading, setLoading] = useState(false);
 
   // Mock cart total - TODO: Get from cart state/database
   const total = 7750;
 
-  const handlePlaceOrder = () => {
-    // TODO: Implement order placement with backend
-    alert("Order placed successfully! (Mock - no backend yet)");
-    navigate("/");
+  const handlePlaceOrder = async () => {
+    if (!user) {
+      toast({ title: "Please login to place order", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get cart items
+      const { data: cartItems, error: cartError } = await supabase
+        .from('cart_items')
+        .select(`
+          *,
+          product:products (
+            id,
+            title,
+            price,
+            store_id,
+            images:product_images (url)
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (cartError) throw cartError;
+      if (!cartItems || cartItems.length === 0) {
+        toast({ title: "Cart is empty", variant: "destructive" });
+        navigate('/cart');
+        return;
+      }
+
+      // Group items by store
+      const itemsByStore = cartItems.reduce((acc: any, item: any) => {
+        const storeId = item.product.store_id;
+        if (!acc[storeId]) acc[storeId] = [];
+        acc[storeId].push(item);
+        return acc;
+      }, {});
+
+      // Create orders for each store
+      for (const [storeId, items] of Object.entries(itemsByStore) as any) {
+        const totalAmount = items.reduce(
+          (sum: number, item: any) => sum + item.product.price * item.quantity,
+          0
+        );
+
+        // Create order
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            user_id: user.id,
+            store_id: storeId,
+            total_amount: totalAmount + 10, // Add shipping
+            status: 'pending',
+            shipping_info: {
+              method: deliveryMethod,
+              address: deliveryMethod === 'delivery' ? {
+                name: 'User Name', // Get from form
+                phone: 'Phone', // Get from form
+                address: 'Address', // Get from form
+              } : null,
+            },
+            payment_provider: paymentMethod,
+          })
+          .select()
+          .single();
+
+        if (orderError) throw orderError;
+
+        // Create order items
+        for (const item of items) {
+          await supabase.from('order_items').insert({
+            order_id: order.id,
+            product_id: item.product_id,
+            variant_id: item.variant_id,
+            quantity: item.quantity,
+            unit_price: item.product.price,
+            total_price: item.product.price * item.quantity,
+            title: item.product.title,
+          });
+        }
+
+        // Clear cart for this store
+        await supabase
+          .from('cart_items')
+          .delete()
+          .in('id', items.map((i: any) => i.id));
+      }
+
+      toast({ title: "Order placed successfully!" });
+      navigate('/orders');
+    } catch (error: any) {
+      console.error('Error placing order:', error);
+      toast({ title: "Error placing order", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -142,7 +240,8 @@ export default function Checkout() {
 
       {/* Sticky Bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 safe-bottom">
-        <Button size="lg" className="w-full" onClick={handlePlaceOrder}>
+        <Button size="lg" className="w-full" onClick={handlePlaceOrder} disabled={loading}>
+          {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           Place Order - ${total.toLocaleString()}
         </Button>
       </div>

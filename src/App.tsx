@@ -34,9 +34,12 @@ import Customization from "./pages/Customization";
 import Ranking from "./pages/Ranking";
 import SellerDashboard from "./pages/seller/Dashboard";
 import SellerProducts from "./pages/seller/Products";
+import SellerProductNew from "./pages/seller/ProductNew";
 import SellerEarnings from "./pages/seller/Earnings";
 import Auth from "./pages/Auth";
 import AdminDashboard from "./pages/admin/Dashboard";
+import Notifications from "./pages/Notifications";
+import Search from "./pages/Search";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,9 +57,11 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/categories" element={<ProtectedRoute><CategoryListing /></ProtectedRoute>} />
           <Route path="/messenger" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
+          <Route path="/messenger/:id" element={<ProtectedRoute><ConversationDetail /></ProtectedRoute>} />
           <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/search" element={<SearchResults />} />
+          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/search" element={<Search />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           
           {/* Settings Routes */}
@@ -94,7 +99,7 @@ const App = () => (
           <Route path="/seller/dashboard" element={<SellerDashboard />} />
           <Route path="/seller/store" element={<SellerDashboard />} />
           <Route path="/seller/products" element={<SellerProducts />} />
-          <Route path="/seller/products/new" element={<NotFound />} />
+          <Route path="/seller/products/new" element={<SellerProductNew />} />
           <Route path="/seller/orders" element={<Orders />} />
           <Route path="/seller/earnings" element={<SellerEarnings />} />
           <Route path="/seller/analytics" element={<NotFound />} />
