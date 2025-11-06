@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_auth_attempts: {
+        Row: {
+          attempted_at: string | null
+          id: string
+          ip_address: string
+          step: string
+          success: boolean | null
+        }
+        Insert: {
+          attempted_at?: string | null
+          id?: string
+          ip_address: string
+          step: string
+          success?: boolean | null
+        }
+        Update: {
+          attempted_at?: string | null
+          id?: string
+          ip_address?: string
+          step?: string
+          success?: boolean | null
+        }
+        Relationships: []
+      }
+      admin_secrets: {
+        Row: {
+          created_at: string | null
+          id: number
+          label: string
+          passhash: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          label: string
+          passhash: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          label?: string
+          passhash?: string
+        }
+        Relationships: []
+      }
+      admin_sessions: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          ip_address: string | null
+          session_token: string | null
+          step1_verified: boolean | null
+          step2_verified: boolean | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: string | null
+          session_token?: string | null
+          step1_verified?: boolean | null
+          step2_verified?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: string | null
+          session_token?: string | null
+          step1_verified?: boolean | null
+          step2_verified?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -21,8 +102,10 @@ export type Database = {
           created_at: string | null
           details: Json | null
           id: string
+          ip_address: string | null
           resource_id: string | null
           resource_type: string | null
+          user_agent: string | null
         }
         Insert: {
           action: string
@@ -30,8 +113,10 @@ export type Database = {
           created_at?: string | null
           details?: Json | null
           id?: string
+          ip_address?: string | null
           resource_id?: string | null
           resource_type?: string | null
+          user_agent?: string | null
         }
         Update: {
           action?: string
@@ -39,8 +124,10 @@ export type Database = {
           created_at?: string | null
           details?: Json | null
           id?: string
+          ip_address?: string | null
           resource_id?: string | null
           resource_type?: string | null
+          user_agent?: string | null
         }
         Relationships: []
       }
@@ -501,6 +588,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      verify_password: {
+        Args: { input_pass: string; stored_hash: string }
         Returns: boolean
       }
     }

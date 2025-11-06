@@ -24,20 +24,48 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
+    const checkAdminAccess = async () => {
+      // Check if admin session is verified via two-step auth
+      const adminSessionToken = localStorage.getItem('admin_session_token');
+      const adminSessionVerified = localStorage.getItem('admin_session_verified');
+      const adminSessionExpires = localStorage.getItem('admin_session_expires');
 
-    if (!hasRole('admin')) {
-      toast.error("Access denied. Admin only.");
-      navigate('/');
-      return;
-    }
+      // Check session expiry
+      if (adminSessionExpires && Date.now() > parseInt(adminSessionExpires)) {
+        localStorage.removeItem('admin_session_token');
+        localStorage.removeItem('admin_session_verified');
+        localStorage.removeItem('admin_session_expires');
+        toast.error("Admin session expired. Please authenticate again.");
+        navigate('/admin/auth/step1');
+        return;
+      }
 
-    fetchStats();
-    fetchApplications();
-  }, [user, hasRole, navigate]);
+      // Require two-step admin auth
+      if (!adminSessionToken || adminSessionVerified !== 'true') {
+        toast.error("Admin authentication required");
+        navigate('/admin/auth/step1');
+        return;
+      }
+
+      // Optional: Check if user has admin role in database (additional layer)
+      if (user && !loading) {
+        const hasAdminRole = hasRole('admin');
+        if (!hasAdminRole) {
+          toast.error("Access denied. Admin privileges required.");
+          navigate('/');
+          return;
+        }
+      }
+
+      // All checks passed, fetch data
+      fetchStats();
+      fetchApplications();
+    };
+
+    if (!loading) {
+      checkAdminAccess();
+    }
+  }, [user, hasRole, navigate, loading]);
 
   const fetchStats = async () => {
     const [usersRes, storesRes, productsRes, appsRes] = await Promise.all([
@@ -78,74 +106,54 @@ export default function AdminDashboard() {
 
   const handleApproveApplication = async (applicationId: string, userId: string) => {
     try {
-      // Update application status
-      const { error: appError } = await supabase
-        .from('seller_applications')
-        .update({ 
-          status: 'approved',
-          reviewed_at: new Date().toISOString(),
-          reviewer_id: user?.id
-        })
-        .eq('id', applicationId);
+      const sessionToken = localStorage.getItem('admin_session_token');
+      
+      const { data, error } = await supabase.functions.invoke('admin-approve-seller', {
+        body: { 
+          applicationId, 
+          sessionToken,
+          action: 'approve'
+        }
+      });
 
-      if (appError) throw appError;
+      if (error) throw error;
 
-      // Add seller role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({ user_id: userId, role: 'seller' });
-
-      if (roleError) throw roleError;
-
-      // Create store (basic setup)
-      const { data: appData } = await supabase
-        .from('seller_applications')
-        .select('application_data')
-        .eq('id', applicationId)
-        .single();
-
-      const appDataObj = appData?.application_data as any;
-      const businessName = appDataObj?.business_name || 'New Store';
-      const slug = businessName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-
-      const { error: storeError } = await supabase
-        .from('stores')
-        .insert({
-          user_id: userId,
-          name: businessName,
-          slug: `${slug}-${Date.now()}`,
-          status: 'active'
-        });
-
-      if (storeError) throw storeError;
-
-      toast.success("Application approved! Seller account created.");
-      fetchApplications();
-      fetchStats();
+      if (data.success) {
+        toast.success("Application approved! Seller account created.");
+        fetchApplications();
+        fetchStats();
+      } else {
+        toast.error(data.error || 'Approval failed');
+      }
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to approve application');
     }
   };
 
   const handleRejectApplication = async (applicationId: string, userId: string) => {
     try {
-      const { error } = await supabase
-        .from('seller_applications')
-        .update({ 
-          status: 'rejected',
-          reviewed_at: new Date().toISOString(),
-          reviewer_id: user?.id,
-          review_notes: 'Application rejected by admin'
-        })
-        .eq('id', applicationId);
+      const sessionToken = localStorage.getItem('admin_session_token');
+      
+      const { data, error } = await supabase.functions.invoke('admin-approve-seller', {
+        body: { 
+          applicationId, 
+          sessionToken,
+          action: 'reject',
+          reviewNotes: 'Application does not meet our current requirements'
+        }
+      });
 
       if (error) throw error;
 
-      toast.success("Application rejected.");
-      fetchApplications();
-      fetchStats();
+      if (data.success) {
+        toast.success("Application rejected.");
+        fetchApplications();
+        fetchStats();
+      } else {
+        toast.error(data.error || 'Rejection failed');
+      }
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to reject application');
     }
   };
 

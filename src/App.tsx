@@ -38,6 +38,8 @@ import SellerProductNew from "./pages/seller/ProductNew";
 import SellerEarnings from "./pages/seller/Earnings";
 import Auth from "./pages/Auth";
 import AdminDashboard from "./pages/admin/Dashboard";
+import AdminAuthStep1 from "./pages/admin/AdminAuthStep1";
+import AdminAuthStep2 from "./pages/admin/AdminAuthStep2";
 import Notifications from "./pages/Notifications";
 import Search from "./pages/Search";
 import NotFound from "./pages/NotFound";
@@ -87,6 +89,8 @@ const App = () => (
           <Route path="/support/chat" element={<SupportChat />} />
           
           {/* Admin Routes */}
+          <Route path="/admin/auth/step1" element={<AdminAuthStep1 />} />
+          <Route path="/admin/auth/step2" element={<AdminAuthStep2 />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           
           {/* Business Features */}
