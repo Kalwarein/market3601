@@ -20,7 +20,8 @@ import {
   Package,
   ShoppingBag,
   DollarSign,
-  BarChart3
+  BarChart3,
+  Shield
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,7 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const sellerStatus = useSellerStatus();
   const [products, setProducts] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
@@ -71,6 +72,11 @@ export default function Profile() {
     { icon: Headphones, label: "Help Center", path: "/help" },
     { icon: Settings, label: "Account Settings", path: "/settings" },
   ];
+
+  // Add admin menu item if user has admin role
+  const adminMenuItem = hasRole('admin') 
+    ? [{ icon: Shield, label: "Admin Dashboard", path: "/admin" }]
+    : [];
 
   const sellerMenuItems = [
     { icon: Store, label: "Manage Store", path: "/seller/store", highlight: true },
@@ -345,7 +351,7 @@ export default function Profile() {
 
       {/* Account Settings */}
       <div className="px-4 space-y-2 mb-4">
-        {buyerMenuItems.map((item) => {
+        {[...adminMenuItem, ...buyerMenuItems].map((item) => {
           const Icon = item.icon;
           return (
             <button

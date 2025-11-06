@@ -12,60 +12,44 @@ import { Users, Store, Package, FileText, Shield, Activity } from "lucide-react"
 import { toast } from "sonner";
 
 export default function AdminDashboard() {
-  const { user, hasRole } = useAuth();
   const navigate = useNavigate();
+  const { user, loading: authLoading, hasRole } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalStores: 0,
     totalProducts: 0,
-    pendingApplications: 0
+    pendingApplications: 0,
   });
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
-      // Check if admin session is verified via two-step auth
-      const adminSessionToken = localStorage.getItem('admin_session_token');
-      const adminSessionVerified = localStorage.getItem('admin_session_verified');
-      const adminSessionExpires = localStorage.getItem('admin_session_expires');
+      // Wait for auth to load
+      if (authLoading) return;
 
-      // Check session expiry
-      if (adminSessionExpires && Date.now() > parseInt(adminSessionExpires)) {
-        localStorage.removeItem('admin_session_token');
-        localStorage.removeItem('admin_session_verified');
-        localStorage.removeItem('admin_session_expires');
-        toast.error("Admin session expired. Please authenticate again.");
-        navigate('/admin/auth/step1');
+      // Check if user is logged in
+      if (!user) {
+        toast.error('Please sign in to access admin dashboard');
+        navigate('/auth');
         return;
       }
 
-      // Require two-step admin auth
-      if (!adminSessionToken || adminSessionVerified !== 'true') {
-        toast.error("Admin authentication required");
-        navigate('/admin/auth/step1');
+      // Check if user has admin role
+      if (!hasRole('admin')) {
+        toast.error('Access denied. Admin privileges required.');
+        navigate('/');
         return;
       }
 
-      // Optional: Check if user has admin role in database (additional layer)
-      if (user && !loading) {
-        const hasAdminRole = hasRole('admin');
-        if (!hasAdminRole) {
-          toast.error("Access denied. Admin privileges required.");
-          navigate('/');
-          return;
-        }
-      }
-
-      // All checks passed, fetch data
+      // User is admin, fetch data
+      setLoading(false);
       fetchStats();
       fetchApplications();
     };
 
-    if (!loading) {
-      checkAdminAccess();
-    }
-  }, [user, hasRole, navigate, loading]);
+    checkAdminAccess();
+  }, [user, authLoading, hasRole, navigate]);
 
   const fetchStats = async () => {
     const [usersRes, storesRes, productsRes, appsRes] = await Promise.all([
@@ -106,12 +90,9 @@ export default function AdminDashboard() {
 
   const handleApproveApplication = async (applicationId: string, userId: string) => {
     try {
-      const sessionToken = localStorage.getItem('admin_session_token');
-      
       const { data, error } = await supabase.functions.invoke('admin-approve-seller', {
         body: { 
           applicationId, 
-          sessionToken,
           action: 'approve'
         }
       });
@@ -132,12 +113,9 @@ export default function AdminDashboard() {
 
   const handleRejectApplication = async (applicationId: string, userId: string) => {
     try {
-      const sessionToken = localStorage.getItem('admin_session_token');
-      
       const { data, error } = await supabase.functions.invoke('admin-approve-seller', {
         body: { 
           applicationId, 
-          sessionToken,
           action: 'reject',
           reviewNotes: 'Application does not meet our current requirements'
         }

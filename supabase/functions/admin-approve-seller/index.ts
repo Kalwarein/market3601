@@ -16,32 +16,48 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { applicationId, sessionToken, action, reviewNotes } = await req.json();
-    const ip = req.headers.get('x-forwarded-for') || 'unknown';
-
-    if (!sessionToken) {
+    // Get authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Unauthorized - No auth header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Verify admin session
-    const { data: sessionData } = await supabase
-      .from('admin_sessions')
-      .select('*')
-      .eq('session_token', sessionToken)
-      .eq('step1_verified', true)
-      .eq('step2_verified', true)
-      .gt('expires_at', new Date().toISOString())
+    // Create client with user's auth
+    const supabaseClient = createClient(
+      supabaseUrl,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid user' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if user has admin role
+    const { data: roleCheck } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
       .single();
 
-    if (!sessionData) {
+    if (!roleCheck) {
       return new Response(
-        JSON.stringify({ error: 'Invalid or expired admin session' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Unauthorized - Admin role required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { applicationId, action, reviewNotes } = await req.json();
+    const ip = req.headers.get('x-forwarded-for') || 'unknown';
 
     // Get application
     const { data: application } = await supabase

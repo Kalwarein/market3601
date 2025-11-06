@@ -14,87 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      admin_auth_attempts: {
-        Row: {
-          attempted_at: string | null
-          id: string
-          ip_address: string
-          step: string
-          success: boolean | null
-        }
-        Insert: {
-          attempted_at?: string | null
-          id?: string
-          ip_address: string
-          step: string
-          success?: boolean | null
-        }
-        Update: {
-          attempted_at?: string | null
-          id?: string
-          ip_address?: string
-          step?: string
-          success?: boolean | null
-        }
-        Relationships: []
-      }
-      admin_secrets: {
-        Row: {
-          created_at: string | null
-          id: number
-          label: string
-          passhash: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: number
-          label: string
-          passhash: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: number
-          label?: string
-          passhash?: string
-        }
-        Relationships: []
-      }
-      admin_sessions: {
-        Row: {
-          created_at: string | null
-          expires_at: string | null
-          id: string
-          ip_address: string | null
-          session_token: string | null
-          step1_verified: boolean | null
-          step2_verified: boolean | null
-          user_agent: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string
-          ip_address?: string | null
-          session_token?: string | null
-          step1_verified?: boolean | null
-          step2_verified?: boolean | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string
-          ip_address?: string | null
-          session_token?: string | null
-          step1_verified?: boolean | null
-          step2_verified?: boolean | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       audit_logs: {
         Row: {
           action: string
@@ -590,6 +509,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_email: { Args: { user_email: string }; Returns: boolean }
       verify_password: {
         Args: { input_pass: string; stored_hash: string }
         Returns: boolean
