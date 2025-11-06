@@ -62,14 +62,14 @@ export default function AdminAuthStep1() {
                   <Input
                     id="passphrase"
                     type="password"
-                    placeholder="Enter first passphrase"
+                    placeholder="Enter first passphrase (starts with #)"
                     value={passphrase}
                     onChange={(e) => setPassphrase(e.target.value)}
                     required
                     autoFocus
                   />
                   <p className="text-xs text-muted-foreground">
-                    This is a secure admin area. Contact the system administrator if you need access.
+                    Enter the complete passphrase including the "#" prefix. Contact the system administrator if you need access.
                   </p>
                 </div>
 

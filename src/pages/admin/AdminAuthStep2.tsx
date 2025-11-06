@@ -81,14 +81,14 @@ export default function AdminAuthStep2() {
                   <Input
                     id="passphrase"
                     type="password"
-                    placeholder="Enter second passphrase"
+                    placeholder="Enter second passphrase (starts with #)"
                     value={passphrase}
                     onChange={(e) => setPassphrase(e.target.value)}
                     required
                     autoFocus
                   />
                   <p className="text-xs text-muted-foreground">
-                    Final verification step. Your session will be valid for 30 minutes.
+                    Final verification step. Enter the complete passphrase including the "#" prefix. Session valid for 30 minutes.
                   </p>
                 </div>
 
