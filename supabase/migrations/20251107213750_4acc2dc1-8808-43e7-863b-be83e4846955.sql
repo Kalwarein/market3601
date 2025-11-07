@@ -1,0 +1,30 @@
+-- Update the handle_new_user function to automatically assign admin role to market.360@gmail.com
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  -- Insert profile
+  INSERT INTO public.profiles (id, email, display_name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email)
+  );
+  
+  -- Give all new users the 'buyer' role by default
+  INSERT INTO public.user_roles (user_id, role)
+  VALUES (NEW.id, 'buyer');
+  
+  -- If email is market.360@gmail.com, also give them admin role
+  IF NEW.email = 'market.360@gmail.com' THEN
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (NEW.id, 'admin')
+    ON CONFLICT (user_id, role) DO NOTHING;
+  END IF;
+  
+  RETURN NEW;
+END;
+$function$;
